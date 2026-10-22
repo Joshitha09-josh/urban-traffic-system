@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intelligent Traffic & Congestion Management</title>
+    <script src="https://tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 font-sans p-6">
+    <div class="max-w-7xl mx-auto">
+        <header class="mb-8 flex justify-between items-center border-b border-gray-700 pb-4">
+            <div>
+                <h1 class="text-3xl font-bold text-emerald-400">Metro Traffic Control</h1>
+                <p class="text-gray-400 text-sm">Urban Congestion Management System v1.0</p>
+            </div>
+            <div id="app-version" class="bg-emerald-900 text-emerald-300 px-4 py-2 rounded-lg font-mono text-sm border border-emerald-700">
+                Status: Stable (v1.0.0)
+            </div>
+        </header>
+
+        <!-- Alerts Section for Wait Times > 120s -->
+        <div id="alert-zone" class="mb-6 space-y-2"></div>
+
+        <!-- Congestion Analytics Stats Section -->
+        <section class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            <div class="bg-gray-800 p-4 rounded-xl border border-gray-700">
+                <h3 class="text-gray-400 text-xs uppercase font-semibold">Total Vehicles Monitored</h3>
+                <p id="stat-total-vehicles" class="text-3xl font-bold text-white mt-1">0</p>
+            </div>
+            <div class="bg-gray-800 p-4 rounded-xl border border-gray-700">
+                <h3 class="text-gray-400 text-xs uppercase font-semibold">Highest Congestion</h3>
+                <p id="stat-worst-intersection" class="text-xl font-bold text-red-400 mt-2">None</p>
+            </div>
+            <div class="bg-gray-800 p-4 rounded-xl border border-gray-700">
+                <h3 class="text-gray-400 text-xs uppercase font-semibold">Active Closures</h3>
+                <p id="stat-closures" class="text-3xl font-bold text-amber-400 mt-1">0</p>
+            </div>
+            <!-- Intersection-Based Filter -->
+            <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 flex flex-col justify-center">
+                <label class="text-gray-400 text-xs uppercase font-semibold mb-1">Filter Congestion Level</label>
+                <select id="congestion-filter" class="bg-gray-700 border border-gray-600 rounded p-1.5 text-sm text-white focus:outline-none focus:border-emerald-500">
+                    <option value="All">All Levels</option>
+                    <option value="Low">Low</option>
+                    <option value="Moderate">Moderate</option>
+                    <option value="High">High</option>
+                    <option value="Critical">Critical</option>
+                </select>
+            </div>
+        </section>
+
+        <!-- Live Intersections Grid -->
+        <main class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="intersections-grid"></main>
+    </div>
+
+    <script>
+        // Mandated Simulation Dataset for 5 Core Intersections
+        let intersections = [
+            { id: "INT-001", location: "Downtown Cross & 5th Ave", vehicles: 145, avgWait: 135, status: "Red", closed: false, emergency: false },
+            { id: "INT-002", location: "North Bypass Highway", vehicles: 88, avgWait: 65, status: "Green", closed: false, emergency: false },
+            { id: "INT-003", location: "Financial District Square", vehicles: 210, avgWait: 160, status: "Red", closed: false, emergency: false },
+            { id: "INT-004", location: "Industrial Park East Road", vehicles: 34, avgWait: 25, status: "Green", closed: false, emergency: false },
+            { id: "INT-005", location: "Suburban Boulevard Interchange", vehicles: 112, avgWait: 95, status: "Yellow", closed: false, emergency: false }
+        ];
+
+        function getCongestionLevel(wait) {
+            if (wait >= 140) return { label: "Critical", color: "bg-red-900/50 text-red-300 border-red-700" };
+            if (wait >= 100) return { label: "High", color: "bg-orange-900/50 text-orange-300 border-orange-700" };
+            if (wait >= 50) return { label: "Moderate", color: "bg-yellow-900/50 text-yellow-300 border-yellow-700" };
+            return { label: "Low", color: "bg-green-900/50 text-green-300 border-green-700" };
+        }
+
+        function toggleClosure(id) {
+            const item = intersections.find(i => i.id === id);
+            item.closed = !item.closed;
+            render();
+        }
+
+        function toggleEmergency(id) {
+            const item = intersections.find(i => i.id === id);
+            item.emergency = !item.emergency;
+            if(item.emergency) {
+                item.status = "Green";
+                item.avgWait = Math.max(10, item.avgWait - 50);
+            }
+            render();
+        }
+
+        function render() {
+            const filterValue = document.getElementById('congestion-filter').value;
+            const grid = document.getElementById('intersections-grid');
+            const alertZone = document.getElementById('alert-zone');
+            
+            grid.innerHTML = '';
+            alertZone.innerHTML = '';
+            
+            let totalVehicles = 0;
+            let worstInt = null;
+            let maxWait = -1;
+            let activeClosures = 0;
+
+            intersections.forEach(item => {
+                const config = getCongestionLevel(item.avgWait);
+                totalVehicles += item.vehicles;
+                if (item.avgWait > maxWait) {
+                    maxWait = item.avgWait;
+                    worstInt = item;
+                }
+                if (item.closed) activeClosures++;
+
+                // Alert when vehicle waiting time exceeds 120 seconds
+                if (item.avgWait > 120 && !item.closed) {
+                    alertZone.innerHTML += `
+                        <div class="bg-red-950 border border-red-700 text-red-200 px-4 py-3 rounded-lg flex justify-between items-center text-sm">
+                            <span><strong>⚠️ THRESHOLD ALERT:</strong> ${item.location} (${item.id}) wait time exceeds 120s! Current: <strong>${item.avgWait}s</strong>.</span>
+                        </div>
+                    `;
+                }
+
+                // Road closure and emergency vehicle advisories display
+                if (item.closed) {
+                    alertZone.innerHTML += `
+                        <div class="bg-amber-950 border border-amber-700 text-amber-200 px-4 py-3 rounded-lg text-sm">
+                            <strong>🚧 CLOSURE ADVISORY:</strong> ${item.location} is closed. Rerouting active.
+                        </div>
+                    `;
+                }
+
+                if (filterValue !== 'All' && config.label !== filterValue) return;
+
+                // Signal-timing adjustments logic
+                let adjustments = "Signal intervals optimal.";
+                if (item.emergency) {
+                    adjustments = "🟢 EMERGENCY OVERRIDE: Holding Green Phase.";
+                } else if (config.label === "Critical" || config.label === "High") {
+                    adjustments = `⏱️ Suggested Timing Adjustment: +${Math.round(item.vehicles * 0.2)}s Green Phase.`;
+                }
+
+                const card = document.createElement('div');
+                card.className = `bg-gray-800 border rounded-xl p-5 ${item.closed ? 'opacity-50 border-gray-700' : 'border-gray-700'}`;
+                
+                card.innerHTML = `
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="text-xs font-mono text-emerald-400">${item.id}</span>
+                        <span class="text-xs font-semibold px-2 py-0.5 rounded border ${config.color}">${item.closed ? 'CLOSED' : config.label}</span>
+                    </div>
+                    <h2 class="text-lg font-bold text-white">${item.location}</h2>
+                    <div class="my-3 text-sm bg-gray-900 p-3 rounded-lg">
+                        <p>Vehicles: <span class="font-bold text-white">${item.vehicles}</span></p>
+                        <p>Wait Time: <span class="font-bold text-white">${item.avgWait}s</span></p>
+                        <p>Signal: <span class="font-bold text-white">${item.status}</span></p>
+                    </div>
+                    <div class="text-xs bg-gray-900 p-2 rounded mb-3 text-gray-400">${adjustments}</div>
+                    <div class="flex gap-2">
+                        <button onclick="toggleClosure('${item.id}')" class="flex-1 text-xs py-1 bg-amber-600 rounded text-white hover:bg-amber-700">Toggle Closure</button>
+                        <button onclick="toggleEmergency('${item.id}')" class="flex-1 text-xs py-1 bg-red-600 rounded text-white hover:bg-red-700">🚨 Emergency</button>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+
+            document.getElementById('stat-total-vehicles').innerText = totalVehicles;
+            document.getElementById('stat-worst-intersection').innerText = worstInt ? `${worstInt.id} (${worstInt.avgWait}s)` : 'None';
+            document.getElementById('stat-closures').innerText = activeClosures;
+        }
+
+        document.getElementById('congestion-filter').addEventListener('change', render);
+        render();
+    </script>
+</body>
+</html>
